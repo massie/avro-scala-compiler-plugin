@@ -5,6 +5,16 @@ import com.googlecode.avro.marker.{ AvroRecord, AvroUnion }
 
 import java.nio.ByteBuffer
 
+object TestObj {
+  def main(args: Array[String]) {
+    println(Test0.schema)
+    println(Test1.schema)
+    //println(Test2.schema)
+    //println(Test5.schema)
+    //println(Test5Inner.schema)
+  }
+}
+
 case class Test0(var i: Int) extends AvroRecord
 
 sealed trait Test1_Union extends AvroUnion
@@ -60,4 +70,8 @@ case class Test12(var a0: Int) extends AvroRecord {
 
 case class Test13(var a0: Int)(var a1: Boolean) extends AvroRecord {
   var a2: Option[String] = None
+}
+
+object Test14Obj {
+  case class Test14(var i: Int) extends AvroRecord
 }

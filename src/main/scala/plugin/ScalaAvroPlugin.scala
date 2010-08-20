@@ -19,19 +19,19 @@ import org.apache.avro.{specific, Schema}
 import Schema.Type
 import specific.SpecificRecord
 
-trait ScalaAvroPluginComponent extends PluginComponent {
+trait ScalaAvroPluginLogger {
+  val global: Global
+  def debug(s: => AnyRef) {
+    if (global.settings.debug.value)
+      Console.err.println(s)
+    //println(s)
+  }
+}
+
+
+trait ScalaAvroPluginComponent extends PluginComponent with ScalaAvroPluginLogger {
   import global._
   import global.definitions
-
-  protected def debug(a: AnyRef) {
-    if (settings.debug.value) 
-      println(a)
-    //println(a)
-  }
-
-  protected def warn(a: AnyRef) {
-    println(a)
-  }
 
   protected def isValDef(tree: Tree): Boolean = tree.isInstanceOf[ValDef] 
   protected def isVar(tree: Tree): Boolean = isVarSym(tree.symbol)
@@ -164,6 +164,107 @@ class ScalaAvroPlugin(val global: Global) extends Plugin {
   val companionModuleMap: Map[String, Symbol] = new HashMap[String, Symbol]
   val companionClassMap: Map[String, Symbol] = new HashMap[String, Symbol]
 
+  // see: src/compiler/scala/tools/nsc/typechecker/Analyzer.scala
+  object avroNamerFactory extends PluginComponent {
+    val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
+    val phaseName = "avronamer"
+    val runsAfter = List[String]("parser")
+    override val runsRightAfter = None
+    override val runsBefore = List[String]("namer")
+    def newPhase(_prev: Phase): StdPhase = new StdPhase(_prev) {
+      override val checkable = false
+      override def keepsTypeParams = false
+      def apply(unit: CompilationUnit) {
+        import global.analyzer._
+        newNamer(rootContext(unit)).enterSym(unit.body)
+      }   
+    }   
+  }
+
+  //object avroAnalyzer extends {
+  //  val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
+  //} with AvroAnalyzer {
+
+  //  // see: src/compiler/scala/tools/nsc/typechecker/Analyzer.scala
+  //  object avroNamerFactory extends PluginComponent {
+  //    val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
+  //    val phaseName = "avronamer"
+  //    val runsAfter = List[String]("parser")
+  //    override val runsRightAfter = None
+  //    override val runsBefore = List[String]("namer")
+  //    def newPhase(_prev: Phase): StdPhase = new StdPhase(_prev) {
+  //      override val checkable = false
+  //      override def keepsTypeParams = false
+  //      def apply(unit: CompilationUnit) {
+  //        newNamer(rootContext(unit)).enterSym(unit.body)
+  //      }   
+  //    }   
+  //  }
+
+  //  // see: src/compiler/scala/tools/nsc/typechecker/Analyzer.scala
+  //  object avroPackageObjects extends PluginComponent {
+  //    val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
+  //    val phaseName = "avropackageobjects"
+  //    val runsAfter = List[String]()
+  //    override val runsRightAfter= Some("namertest")
+
+  //    def newPhase(_prev: Phase): StdPhase = new StdPhase(_prev) {
+  //      import global._
+
+  //      val openPackageObjectsTraverser = new Traverser {
+  //        override def traverse(tree: Tree): Unit = tree match {
+  //          case ModuleDef(_, _, _) =>
+  //            if (tree.symbol.name == nme.PACKAGEkw) {
+  //              loaders.openPackageModule(tree.symbol)()
+  //            }   
+  //          case ClassDef(_, _, _, _) => () // make it fast
+  //          case _ => super.traverse(tree)
+  //        }   
+  //      }   
+
+  //      def apply(unit: CompilationUnit) {
+  //        openPackageObjectsTraverser(unit.body)
+  //      }   
+  //    }   
+  //  }
+
+  //  // see: src/compiler/scala/tools/nsc/typechecker/Analyzer.scala
+  //  object avroTyperFactory extends PluginComponent {
+  //    val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
+  //    val phaseName = "avrotyper"
+  //    val runsAfter = List[String]()
+  //    override val runsRightAfter = Some("avropackageobjects")
+  //    def newPhase(_prev: Phase): StdPhase = new StdPhase(_prev) {
+  //      override def keepsTypeParams = false
+  //      resetTyper() // this does not in fact to the reset for each compilation run!
+  //      override def run { 
+  //        //val start = startTimer(typerNanos)
+  //        currentRun.units foreach applyPhase
+  //        //stopTimer(typerNanos, start)
+  //      }   
+  //      def apply(unit: CompilationUnit) {
+  //        try {
+  //          unit.body = newTyper(rootContext(unit)).typed(unit.body)
+  //          if (global.settings.Yrangepos.value && !global.reporter.hasErrors) global.validatePositions(unit.body)
+  //          for (workItem <- unit.toCheck) workItem()
+  //        } finally {
+  //          unit.toCheck.clear()
+  //        }   
+  //      }   
+  //    }   
+  //  }
+  //}
+
+  object preTyperTransform extends PreTyperTransform {
+    val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
+    val classToSchema = ScalaAvroPlugin.this.classToSchema
+    val unionToExtenders = ScalaAvroPlugin.this.unionToExtenders
+    val unionToSchemas = ScalaAvroPlugin.this.unionToSchemas
+    val unitMap = ScalaAvroPlugin.this.unitMap
+    val companionModuleMap = ScalaAvroPlugin.this.companionModuleMap
+    val companionClassMap = ScalaAvroPlugin.this.companionClassMap
+  }
+
   object extender extends Extender {
     val global : ScalaAvroPlugin.this.global.type = ScalaAvroPlugin.this.global
     val classToSchema = ScalaAvroPlugin.this.classToSchema
@@ -245,6 +346,11 @@ class ScalaAvroPlugin(val global: Global) extends Plugin {
   }
 
   val components = List[PluginComponent](
+    //avroAnalyzer.avroNamerFactory,
+    avroNamerFactory,
+    preTyperTransform,
+    //avroAnalyzer.avroPackageObjects,
+    //avroAnalyzer.avroTyperFactory,
     extender,
     ctorRetype,
     unionDiscover,

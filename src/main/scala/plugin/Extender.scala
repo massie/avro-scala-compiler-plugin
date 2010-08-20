@@ -33,7 +33,7 @@ trait Extender extends ScalaAvroPluginComponent
       // subtype of SpecificRecordBase
       val (car, cdr) = clazz.tpe.parents.splitAt(1)
       if (car.head != ObjectClass.tpe && !(car.head <:< SpecificRecordBaseClass.tpe))
-        warn("Replacing inheritance of non specific record base type")
+        warning("Replacing inheritance of non specific record base type")
       ClassInfoType(List(SpecificRecordBaseClass.tpe, AvroConversions.tpe) ::: cdr, decls, clazz)
     case _ => tpe
   }
